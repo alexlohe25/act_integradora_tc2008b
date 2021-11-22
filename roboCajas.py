@@ -12,16 +12,13 @@ class WallBlock(Agent):
     def __init__(self, model, pos):
         super().__init__(model.next_id(), model)
         self.pos = pos
-        self.inStack = False
     def step(self):
         pass
-
 class Caja(Agent):
     def __init__(self, model, pos):
         super().__init__(model.next_id(), model)
         self.pos = pos
-    def step(self):
-        pass
+        self.inStack = False
 class Robot(Agent):
     def __init__(self, model, pos):
         super().__init__(model.next_id(), model)
@@ -30,16 +27,48 @@ class Robot(Agent):
         self.matrix = self.model.matrix
         grid = GridPath(matrix = self.matrix)
         self.grid = grid
+
     def step(self):
+        
+        minPath = 100
         self.grid.cleanup()
         grid = GridPath(matrix= self.matrix)
         self.grid = grid
         start = self.grid.node(self.pos[0], self.pos[1])
-        end = self.grid.node(8,8)
+        allBoxesinStack = bool(self.model.initialBoxesPos)
+        if allBoxesinStack:
+            cajacerca = self.pos
+        else:
+            cajacerca = (1,1)
         finder = AStarFinder(diagonal_movement = DiagonalMovement.never)
+        print("---------------- CAJAS Y DISTANCIA ------------------")
+        for boxPos in self.model.initialBoxesPos.keys():
+            self.grid.cleanup()
+            grid = GridPath(matrix= self.matrix)
+            self.grid = grid
+            endTemp = self.grid.node(boxPos[0], boxPos[1])
+            pathTemp, runsTemp = finder.find_path(start, endTemp, self.grid)
+            print (boxPos, " -> ",len(pathTemp))
+            if minPath > len(pathTemp):
+                cajacerca = boxPos
+                minPath = len(pathTemp)
+        
+        print ("----------CAJA MAS CERCANA ----------")
+        print(cajacerca)
+        self.grid.cleanup()
+        grid = GridPath(matrix= self.matrix)
+        self.grid = grid
+        end = self.grid.node(cajacerca[0], cajacerca[1])
         path, runs = finder.find_path(start, end, self.grid)
+        print ("----------CAMINO MAS CERCANA ----------")
+        print (self.pos," -> ",path)
         if(len(path) > 1):
-            self.model.grid.move_agent(self, path[1])
+            next_move = path[1]
+            if next_move in self.model.initialBoxesPos.keys():
+                self.model.boxesFound.append(self.model.initialBoxesPos[next_move])
+                self.model.initialBoxesPos.pop(next_move)
+            
+            self.model.grid.move_agent(self, next_move)
 
 
 
@@ -50,7 +79,8 @@ class Maze(Model):
         self.grid = Grid(10, 10, torus=False)
         self.amountOfAgents = amountOfAgents
         self.amountOfBoxes = amountOfBoxes
-        self.initialBoxesPos = []
+        self.initialBoxesPos = {}
+        self.boxesFound = []
         self.matrix = [
             [0,0,0,0,0,0,0,0,0,0],
             [0,1,1,1,0,0,1,1,1,0],
@@ -73,21 +103,25 @@ class Maze(Model):
         for i in range(self.amountOfBoxes):
             x = self.random.randint(2,8)
             y = self.random.randint(2,8)
-            caja = Caja(self, (y,x))
-            self.grid.place_agent(caja, caja.pos)
+            caja = Caja(self, (x,y))
+            self.grid.place_agent(caja, (y,x))
             self.schedule.add(caja)
-            self.initialBoxesPos.append(caja.pos)
+            self.initialBoxesPos[(y,x)] = caja
 
         for i in range(self.amountOfAgents):
             x = self.random.randint(2,8)
             y = self.random.randint(2,8)
             bender = Robot(self, (y,x))
-            self.grid.place_agent(bender, bender.pos)
+            self.grid.place_agent(bender, (y,x))
             self.schedule.add(bender)
 
 
     def step(self):
         self.schedule.step()
+        print(self.boxesFound)
+        for boxToMove in self.boxesFound:
+            self.grid.remove_agent(boxToMove)
+            self.boxesFound.remove(boxToMove)
 
 def agent_portrayal(agent):
     if type(agent) is Robot:
@@ -99,6 +133,6 @@ def agent_portrayal(agent):
 
 grid = CanvasGrid(agent_portrayal, 10, 10, 450, 450)
 
-server = ModularServer(Maze, [grid], "Act_Integradora_A01733984", {'amountOfAgents':5, 'amountOfBoxes': 14})
+server = ModularServer(Maze, [grid], "Act_Integradora_A01733984", {'amountOfAgents':4, 'amountOfBoxes': 10})
 server.port = 8522
 server.launch()
