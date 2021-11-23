@@ -1,5 +1,5 @@
 from mesa import Agent, Model
-from mesa.space import Grid
+from mesa.space import Grid, MultiGrid
 from mesa.time import RandomActivation
 from mesa.visualization.modules import CanvasGrid
 from mesa.visualization.ModularVisualization import ModularServer
@@ -72,6 +72,8 @@ class Robot(Agent):
         path, runs = finder.find_path(start, end, self.grid)
         if(len(path) > 1):
             next_move = path[1]
+            if cajacerca == self.pos:
+                next_move = path[0]
             if next_move in self.model.initialBoxesPos.keys():
                 self.model.boxesFound.append(self.model.initialBoxesPos[next_move])
                 self.model.initialBoxesPos.pop(next_move)
@@ -104,25 +106,26 @@ class Robot(Agent):
         path, runs = finder.find_path(start, end, self.grid)
         if(len(path) > 1):
             next_move = path[1]
-            if next_move in self.model.stacksPos.keys():
+            if next_move in self.model.stacksPos.keys() and self.model.stacksPos[next_move].boxCounter < 5:
+                caja = Caja(self.model, next_move)
+                caja.inStack = True
+                self.model.grid.place_agent(caja, next_move)
+                self.model.schedule.add(caja)
                 self.model.stacksPos[next_move].boxCounter += 1
                 self.gotBox = False
+                #if self.model.stacksPos[next_move].boxCounter == 5:
+                #    self.model.matrix[self.pos[0]][self.pos[1]] = 0
             self.model.grid.move_agent(self, next_move)
                 
-
-
-
-
 class Maze(Model):
     def __init__(self, amountOfAgents, amountOfBoxes):
         super().__init__()
         self.schedule = RandomActivation(self)
-        self.grid = Grid(10, 10, torus=False)
+        self.grid = MultiGrid(10, 10, torus=False)
+        self.availableCells = 0
         self.amountOfAgents = amountOfAgents
         self.amountOfBoxes = amountOfBoxes
-        self.amountOfStacks = amountOfBoxes//5
-        if amountOfBoxes % 5 > 0:
-            self.amountOfStacks += 1
+
         self.initialBoxesPos = {}
         self.stacksPos = {}
         self.boxesFound = []
@@ -132,7 +135,7 @@ class Maze(Model):
             [0,1,1,1,1,1,1,1,1,0],
             [0,1,1,1,1,1,1,1,1,0],
             [0,1,1,1,1,1,1,1,1,0],
-            [0,1,1,1,1,1,1,1,1,0],
+            [0,0,0,0,1,1,0,0,0,0],
             [0,1,1,1,1,1,1,1,1,0],
             [0,1,1,1,1,1,1,1,1,0],
             [0,1,1,1,1,1,1,1,1,0],
@@ -143,34 +146,46 @@ class Maze(Model):
                 block = WallBlock(self, (x, y))
                 self.grid.place_agent(block, block.pos)
                 self.schedule.add(block)
-        i = 8
+            else:
+                self.availableCells += 1
+        self.availableCells -= self.amountOfAgents
+        if (self.amountOfBoxes > self.availableCells):
+            self.amountOfBoxes = 30
+        self.amountOfStacks = self.amountOfBoxes//5
+        if self.amountOfBoxes % 5 > 0:
+            self.amountOfStacks += 1
+        k = 8
         for j in range(1,self.amountOfStacks + 1):
             if (j > 8):
                 j = 1
-                i -= 1
-            stack = Stack(self,(i,j))
-            self.grid.place_agent(stack, (j , i))
+                k = k - 1
+            stack = Stack(self,(k,j))
+            self.grid.place_agent(stack, (j , k))
             self.schedule.add(stack)
-            self.stacksPos[(j,i)] = stack
-
-
-
-        for i in range(self.amountOfBoxes):
-            x = self.random.randint(2,8)
-            y = self.random.randint(2,8)
-            caja = Caja(self, (x,y))
-            self.grid.place_agent(caja, (y,x))
-            self.schedule.add(caja)
-            self.initialBoxesPos[(y,x)] = caja
+            self.stacksPos[(j,k)] = stack
 
         for i in range(self.amountOfAgents):
-            x = self.random.randint(2,8)
-            y = self.random.randint(2,8)
-            bender = Robot(self, (y,x))
-            self.grid.place_agent(bender, (y,x))
-            self.schedule.add(bender)
+            random_pos = self.grid.find_empty()
+            x = random_pos[1]
+            y = random_pos[0]
+            if self.matrix[x][y] == 1:
+                bender = Robot(self, (y,x))
+                self.grid.place_agent(bender, (y,x))
+                self.schedule.add(bender)
+            else:
+                i = i - 1
 
-
+        for i in range(self.amountOfBoxes):
+            random_pos = self.grid.find_empty()
+            x = random_pos[1]
+            y = random_pos[0]
+            if self.matrix[x][y] == 1:
+                caja = Caja(self, (x,y))
+                self.grid.place_agent(caja, (y,x))
+                self.schedule.add(caja)
+                self.initialBoxesPos[(y,x)] = caja
+            else:
+                i = i - 1
     def step(self):
         self.schedule.step()
         for boxToMove in self.boxesFound:
@@ -192,6 +207,6 @@ def agent_portrayal(agent):
 
 grid = CanvasGrid(agent_portrayal, 10, 10, 450, 450)
 
-server = ModularServer(Maze, [grid], "Act_Integradora_A01733984", {'amountOfAgents':5, 'amountOfBoxes': 11})
+server = ModularServer(Maze, [grid], "Act_Integradora_A01733984", {'amountOfAgents':5, 'amountOfBoxes': 100})
 server.port = 8522
 server.launch()
