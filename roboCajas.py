@@ -8,6 +8,8 @@ from pathfinding.core.diagonal_movement import DiagonalMovement
 from pathfinding.core.grid import Grid as GridPath
 from pathfinding.finder.a_star import AStarFinder
 
+import sys
+
 class WallBlock(Agent):
     def __init__(self, model, pos):
         super().__init__(model.next_id(), model)
@@ -125,10 +127,10 @@ class Maze(Model):
         self.availableCells = 0
         self.amountOfAgents = amountOfAgents
         self.amountOfBoxes = amountOfBoxes
-
         self.initialBoxesPos = {}
         self.stacksPos = {}
         self.boxesFound = []
+        self.steps = 0
         self.matrix = [
             [0,0,0,0,0,0,0,0,0,0],
             [0,1,1,1,0,0,1,1,1,0],
@@ -187,13 +189,22 @@ class Maze(Model):
             else:
                 i = i - 1
     def step(self):
+        boxesInStack = 0
         self.schedule.step()
+        self.steps += 1
         for boxToMove in self.boxesFound:
             self.grid.remove_agent(boxToMove)
             self.schedule.remove(boxToMove)
             self.boxesFound.remove(boxToMove)
         for stack in self.stacksPos:
-            print (self.stacksPos[stack].boxCounter)
+            print ("Cajas en Stack ",stack," -> ",self.stacksPos[stack].boxCounter)
+            boxesInStack += self.stacksPos[stack].boxCounter
+        if (boxesInStack == self.amountOfBoxes):
+            print ("-------- TODAS LAS CAJAS ORDENADAS EN PILAS ----------")
+            print ("Tiempo total (en pasos): ", server.model.steps, )
+            print ("Pasos realizados por los robots: ", self.steps * self.amountOfAgents)
+            print("Presiona Ctrl+C para terminar la simulación")
+            sys.exit(0)
 
 def agent_portrayal(agent):
     if type(agent) is Robot:
