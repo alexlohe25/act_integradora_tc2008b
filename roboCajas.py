@@ -28,7 +28,8 @@ class Caja(Agent):
     def __init__(self, model, pos):
         super().__init__(model.next_id(), model)
         self.pos = pos
-        self.inStack = False
+        self.inStack = 1
+        self.inRobot = False
 class Robot(Agent):
     def __init__(self, model, pos):
         super().__init__(model.next_id(), model)
@@ -77,7 +78,9 @@ class Robot(Agent):
             if cajacerca == self.pos:
                 next_move = path[0]
             if next_move in self.model.initialBoxesPos.keys():
-                self.model.boxesFound.append(self.model.initialBoxesPos[next_move])
+                self.carryingBox = self.model.initialBoxesPos[next_move]
+                self.carryingBox.inRobot = True
+                #self.model.boxesFound.append(self.model.initialBoxesPos[next_move])
                 self.model.initialBoxesPos.pop(next_move)
                 self.gotBox = True
             self.model.grid.move_agent(self, next_move)
@@ -109,27 +112,31 @@ class Robot(Agent):
         if(len(path) > 1):
             next_move = path[1]
             if next_move in self.model.stacksPos.keys() and self.model.stacksPos[next_move].boxCounter < 5:
-                caja = Caja(self.model, next_move)
-                caja.inStack = True
-                self.model.grid.place_agent(caja, next_move)
-                self.model.schedule.add(caja)
+                #caja = Caja(self.model, next_move)
+                
+                #self.model.grid.place_agent(caja, next_move)
+                #self.model.schedule.add(caja)
                 self.model.stacksPos[next_move].boxCounter += 1
+                self.carryingBox.inStack = self.model.stacksPos[next_move].boxCounter
+                self.carryingBox.inRobot = False
                 self.gotBox = False
                 #if self.model.stacksPos[next_move].boxCounter == 5:
                 #    self.model.matrix[self.pos[0]][self.pos[1]] = 0
+            self.carryingBox.pos = next_move
             self.model.grid.move_agent(self, next_move)
                 
 class Maze(Model):
-    def __init__(self, amountOfAgents, amountOfBoxes):
+    def __init__(self):
         super().__init__()
         self.schedule = RandomActivation(self)
         self.grid = MultiGrid(10, 10, torus=False)
         self.availableCells = 0
-        self.amountOfAgents = amountOfAgents
-        self.amountOfBoxes = amountOfBoxes
+        self.amountOfAgents = 5
+        self.amountOfBoxes = 20
         self.initialBoxesPos = {}
         self.stacksPos = {}
         self.boxesFound = []
+        self.allBoxesOrdered = False
         self.steps = 0
         self.matrix = [
             [0,0,0,0,0,0,0,0,0,0],
@@ -137,7 +144,7 @@ class Maze(Model):
             [0,1,1,1,1,1,1,1,1,0],
             [0,1,1,1,1,1,1,1,1,0],
             [0,1,1,1,1,1,1,1,1,0],
-            [0,0,0,0,1,1,0,0,0,0],
+            [0,1,1,1,1,1,1,1,1,0],
             [0,1,1,1,1,1,1,1,1,0],
             [0,1,1,1,1,1,1,1,1,0],
             [0,1,1,1,1,1,1,1,1,0],
@@ -197,27 +204,13 @@ class Maze(Model):
             self.schedule.remove(boxToMove)
             self.boxesFound.remove(boxToMove)
         for stack in self.stacksPos:
-            print ("Cajas en Stack ",stack," -> ",self.stacksPos[stack].boxCounter)
-            boxesInStack += self.stacksPos[stack].boxCounter
-        if (boxesInStack == self.amountOfBoxes):
+            if not self.allBoxesOrdered:
+                print ("Cajas en Stack ",stack," -> ",self.stacksPos[stack].boxCounter)
+                boxesInStack += self.stacksPos[stack].boxCounter
+        if boxesInStack == self.amountOfBoxes and not self.allBoxesOrdered:
+            self.allBoxesOrdered = True
             print ("-------- TODAS LAS CAJAS ORDENADAS EN PILAS ----------")
-            print ("Tiempo total (en pasos): ", server.model.steps, )
+            print ("Tiempo total (en pasos): ", self.steps )
             print ("Pasos realizados por los robots: ", self.steps * self.amountOfAgents)
             print("Presiona Ctrl+C para terminar la simulación")
             sys.exit(0)
-
-def agent_portrayal(agent):
-    if type(agent) is Robot:
-        return {"Shape": "robot.png", "Layer": 0}
-    elif type(agent) is Caja:
-        return {"Shape": "caja.png", "Layer": 0}
-    elif type(agent) is Stack:
-         return {"Shape": "rect", "w": 1, "h": 1, "Filled": "true", "Color": "#343434", "Layer": 0}
-    else:
-        return {"Shape": "rect", "w": 1, "h": 1, "Filled": "true", "Color": "Gray", "Layer": 0}
-
-grid = CanvasGrid(agent_portrayal, 10, 10, 450, 450)
-
-server = ModularServer(Maze, [grid], "Act_Integradora_A01733984", {'amountOfAgents':5, 'amountOfBoxes': 100})
-server.port = 8522
-server.launch()
